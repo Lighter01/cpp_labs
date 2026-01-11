@@ -1,8 +1,14 @@
 #include "tests/test_alpha_blend.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
+#include <chrono>
+#include <fstream>
 #include <iostream>
+// #include <iomanip>
 #include <stdexcept>
+#include <vector>
 
 #include "alpha_hist/io.hpp"
 #include "alpha_hist/utils.hpp"
@@ -25,25 +31,42 @@ static std::string impl_name(Impl impl) {
     return (impl == Impl::Scalar) ? "scalar" : "simd";
 }
 
+static std::string lowercase(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
 void run_blend_case(const std::string& fg_path,
                     const std::string& bg_path,
                     const std::string& out_path,
                     float global_opacity,
                     BlendMode mode,
-                    Impl impl)
+                    Impl impl,
+                    BlendStageTiming& timing,
+                    BlendStageCycles& cycles)
 {
     ImageRGBA8 fg = load_rgba8(fg_path);
     ImageRGBA8 bg = load_rgba8(bg_path);
 
     if (fg.width != bg.width || fg.height != bg.height) {
-        throw std::runtime_error("Input images must have same size: '" + fg_path + "' and '" + bg_path + "'");
+        const std::uint64_t fg_area = static_cast<std::uint64_t>(fg.width)
+                                    * static_cast<std::uint64_t>(fg.height);
+        const std::uint64_t bg_area = static_cast<std::uint64_t>(bg.width)
+                                    * static_cast<std::uint64_t>(bg.height);
+        if (fg_area < bg_area) {
+            fg.resize(bg.width, bg.height);
+        } else {
+            bg.resize(fg.width, fg.height);
+        }
     }
 
     ImageRGBA8 out;
     if (impl == Impl::Scalar) {
-        out = alpha_blend_pipeline_templ<Impl::Scalar>(fg, bg, global_opacity, mode);
+        out = alpha_blend_pipeline_templ<Impl::Scalar>(fg, bg, global_opacity, mode, timing, cycles);
     } else {
-        out = alpha_blend_pipeline_templ<Impl::SIMD>(fg, bg, global_opacity, mode);
+        out = alpha_blend_pipeline_templ<Impl::SIMD>(fg, bg, global_opacity, mode, timing, cycles);
     }
 
     save_png(out_path, alpha_hist::get_background(out));
@@ -53,54 +76,101 @@ int run_alpha_blend_tests(const std::string& input_dir,
                           const std::string& output_dir,
                           float global_opacity,
                           BlendMode mode,
-                          Impl impl)
+                          Impl impl,
+                          int iterations)
 {
     fs::create_directories(output_dir);
 
     const std::string suffix = "_" + impl_name(impl) + "_" + mode_name(mode)
                              + "_a" + std::to_string(global_opacity);
+    const std::string perf_name = "blend_performance_" + suffix + ".csv";
+    const std::string perf_path = (fs::path(output_dir) / perf_name).string();
+    std::ofstream perf_out(perf_path, std::ios::out | std::ios::trunc);
+    if (!perf_out) {
+        throw std::runtime_error("Failed to open output file: '" + perf_path + "'");
+    }
+    perf_out << "out_path,impl,mode,preprocess_ns,blend_ns,postprocess_ns,total_ns,"
+             << "preprocess_cycles,blend_cycles,postprocess_cycles,total_cycles\n";
 
-    // Required test pairs:
-    // A with B, C with D
-    const std::string A = (fs::path(input_dir) / "A.png").string();
-    const std::string B = (fs::path(input_dir) / "B.png").string();
-    const std::string C = (fs::path(input_dir) / "C.png").string();
-    const std::string D = (fs::path(input_dir) / "D.png").string();
-    const std::string sayori = (fs::path(input_dir) / "sayori.png").string();
-    const std::string monika = (fs::path(input_dir) / "monika_end.png").string();
-    const std::string eva1 = (fs::path(input_dir) / "eva_1.png").string();
-    const std::string eva2 = (fs::path(input_dir) / "eva_2.png").string();
+    std::vector<fs::path> images;
+    for (const auto& entry : fs::directory_iterator(input_dir)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
 
-    const std::string outAB = (fs::path(output_dir) / ("AB" + suffix + ".png")).string();
-    const std::string outCD = (fs::path(output_dir) / ("CD" + suffix + ".png")).string();
-    const std::string outSM = (fs::path(output_dir) / ("SayoriMonika" + suffix + ".png")).string();
-    const std::string outEVA = (fs::path(output_dir) / ("eva_12" + suffix + ".png")).string();
+        const fs::path path = entry.path();
+        const std::string ext = lowercase(path.extension().string());
+        if ((ext != ".png") && (ext != ".jpg") && (ext != ".jpeg")) {
+            continue;
+        }
 
-    std::cout << "Blending:\n"
-              << "  FG: " << A << "\n"
-              << "  BG: " << B << "\n"
-              << "  ->  " << outAB << "\n";
-    run_blend_case(A, B, outAB, global_opacity, mode, impl);
+        images.push_back(path);
+    }
 
-    std::cout << "Blending:\n"
-              << "  FG: " << C << "\n"
-              << "  BG: " << D << "\n"
-              << "  ->  " << outCD << "\n";
-    run_blend_case(C, D, outCD, global_opacity, mode, impl);
+    std::sort(images.begin(), images.end());
 
-    std::cout << "Blending:\n"
-              << "  FG: " << sayori << "\n"
-              << "  BG: " << monika << "\n"
-              << "  ->  " << outSM << "\n";
-    run_blend_case(sayori, monika, outSM, global_opacity, mode, impl);
+    size_t processed = 0;
+    for (size_t i = 0; i + 1 < images.size(); i += 2) {
+        const fs::path fg_path = images[i];
+        const fs::path bg_path = images[i + 1];
+        const std::string out_name = fg_path.stem().string() + "_" + bg_path.stem().string()
+                                   + suffix + ".png";
+        const std::string out_path = (fs::path(output_dir) / out_name).string();
 
-    std::cout << "Blending:\n"
-              << "  FG: " << eva1 << "\n"
-              << "  BG: " << eva2 << "\n"
-              << "  ->  " << outEVA << "\n";
-    run_blend_case(eva1, eva2, outEVA, global_opacity, mode, impl);
+        std::cout << "Blending:\n"
+                  << "  FG: " << fg_path.string() << "\n"
+                  << "  BG: " << bg_path.string() << "\n"
+                  << "  ->  " << out_path << "\n";
+        BlendStageTiming timing;
+        BlendStageCycles cycles;
+        for (int iter = 0; iter < iterations; ++iter) {
+            std::cout << "Iteration " << iter << "\n";
 
-    std::cout << "Done. Results saved to: " << output_dir << "\n";
+            auto t0 = std::chrono::high_resolution_clock::now();
+
+            run_blend_case(fg_path.string(), bg_path.string(), out_path, global_opacity, mode, impl,
+                           timing, cycles);
+
+            const auto preprocess_ns =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(timing.preprocess).count();
+            const auto blend_ns =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(timing.blend).count();
+            const auto postprocess_ns =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(timing.postprocess).count();
+            const auto total_ns = preprocess_ns + blend_ns + postprocess_ns;
+            const std::uint64_t total_cycles = cycles.preprocess + cycles.blend + cycles.postprocess;
+
+            perf_out << out_path << ","
+                     << impl_name(impl) << ","
+                     << mode_name(mode) << ","
+                     << preprocess_ns << ","
+                     << blend_ns << ","
+                     << postprocess_ns << ","
+                     << total_ns << ","
+                     << cycles.preprocess << ","
+                     << cycles.blend << ","
+                     << cycles.postprocess << ","
+                     << total_cycles << "\n";
+
+            auto t1 = std::chrono::high_resolution_clock::now();
+            const auto iter_time_sec = 
+                std::chrono::duration_cast<std::chrono::seconds>(t1 - t0).count();
+            const auto iter_time_millisec = 
+                std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+            std::cout << "Iteration finished. Elapsed time: " << iter_time_sec << " sec. ("
+                      << iter_time_millisec << " ms.)\n";
+            std::cout <<  std::string(50, '=') << '\n';
+        }
+        ++processed;
+    }
+
+    if (images.size() % 2 != 0) {
+        std::cout << "Warning: odd number of PNG files in input directory. "
+                  << "Last file is skipped: " << images.back().string() << "\n";
+    }
+
+    std::cout << "Done. " << processed << " pair(s) processed. Results saved to: "
+              << output_dir << "\n";
     return 0;
 }
 

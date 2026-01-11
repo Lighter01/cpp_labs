@@ -8,7 +8,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # helps IntelliSense in VS Code
 # --- Library with your implementation ---
 add_library(alpha_hist_lib
     src/stb_impl.cpp
-    # add your source files here as you create them, e.g.:
     src/io.cpp
     src/utils.cpp
     src/color_lut.cpp

@@ -16,7 +16,7 @@ namespace alpha_hist {
         }
     }
     
-    // CODEX TO IMPLEMENT
+    
     void histogram_simd(const ImageGray8& in, std::array<std::uint32_t, 256>& out)
     {
         const std::uint8_t* pixels = in.data.data();

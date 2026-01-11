@@ -2,6 +2,7 @@
 #include "alpha_hist/color_convert.hpp"
 
 #include <cstdlib>
+#include <chrono>
 #include <string>
 #include <tuple>
 #include <stdexcept>
@@ -240,41 +241,114 @@ namespace alpha_hist {
         }
     }
 
+
     template <Impl I>
     ImageRGBA8 alpha_blend_pipeline_templ(
         const ImageRGBA8& fg_srgb,
         const ImageRGBA8& bg_srgb,
         float global_opacity,
-        BlendMode mode
+        BlendMode mode,
+        BlendStageTiming& timing,
+        BlendStageCycles& cycles
     ) {
         ImageRGBAf fg_linear, bg_linear, out_linear;
-
-        // sRGB -> linear
-        srgb_to_linear(fg_srgb, fg_linear);
-        srgb_to_linear(bg_srgb, bg_linear);
-
-        premultiply_inplace(fg_linear);
-        premultiply_inplace(bg_linear);
+        ImageRGBA8 out_srgb;
 
         if constexpr (I == Impl::Scalar) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            std::uint64_t c0 = static_cast<std::uint64_t>(_rdtsc());
+            preprocess_images_scalar(fg_srgb, bg_srgb, fg_linear, bg_linear);
+            std::uint64_t c1 = static_cast<std::uint64_t>(_rdtsc());
+            auto t1 = std::chrono::high_resolution_clock::now();
+            timing.preprocess = t1 - t0;
+            cycles.preprocess = c1 - c0;
+
+            t0 = std::chrono::high_resolution_clock::now();
+            c0 = static_cast<std::uint64_t>(_rdtsc());
             blend_scalar(fg_linear, bg_linear, out_linear, global_opacity, mode);
+            c1 = static_cast<std::uint64_t>(_rdtsc());
+            t1 = std::chrono::high_resolution_clock::now();
+            timing.blend = t1 - t0;
+            cycles.blend = c1 - c0;
+
+            t0 = std::chrono::high_resolution_clock::now();
+            c0 = static_cast<std::uint64_t>(_rdtsc());
+            postprocess_image_scalar(out_linear, out_srgb);
+            c1 = static_cast<std::uint64_t>(_rdtsc());
+            t1 = std::chrono::high_resolution_clock::now();
+            timing.postprocess = t1 - t0;
+            cycles.postprocess = c1 - c0;
         } else {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            std::uint64_t c0 = static_cast<std::uint64_t>(_rdtsc());
+            preprocess_images_simd(fg_srgb, bg_srgb, fg_linear, bg_linear);
+            std::uint64_t c1 = static_cast<std::uint64_t>(_rdtsc());
+            auto t1 = std::chrono::high_resolution_clock::now();
+            timing.preprocess = t1 - t0;
+            cycles.preprocess = c1 - c0;
+
+            t0 = std::chrono::high_resolution_clock::now();
+            c0 = static_cast<std::uint64_t>(_rdtsc());
             blend_simd(fg_linear, bg_linear, out_linear, global_opacity, mode);
+            c1 = static_cast<std::uint64_t>(_rdtsc());
+            t1 = std::chrono::high_resolution_clock::now();
+            timing.blend = t1 - t0;
+            cycles.blend = c1 - c0;
+
+            t0 = std::chrono::high_resolution_clock::now();
+            c0 = static_cast<std::uint64_t>(_rdtsc());
+            postprocess_image_simd(out_linear, out_srgb);
+            c1 = static_cast<std::uint64_t>(_rdtsc());
+            t1 = std::chrono::high_resolution_clock::now();
+            timing.postprocess = t1 - t0;
+            cycles.postprocess = c1 - c0;
         }
-
-        revert_premultiply_inplace(out_linear);
-
-        // linear -> sRGB
-        ImageRGBA8 out_srgb;
-        linear_to_srgb(out_linear, out_srgb);
 
         return out_srgb;
     }
 
     template ImageRGBA8 alpha_blend_pipeline_templ<Impl::Scalar>(
-        const ImageRGBA8&, const ImageRGBA8&, float, BlendMode);
+        const ImageRGBA8&, const ImageRGBA8&, float, BlendMode, BlendStageTiming&, BlendStageCycles&);
 
     template ImageRGBA8 alpha_blend_pipeline_templ<Impl::SIMD>(
-        const ImageRGBA8&, const ImageRGBA8&, float, BlendMode);
+        const ImageRGBA8&, const ImageRGBA8&, float, BlendMode, BlendStageTiming&, BlendStageCycles&);
+    
+    //=============================================================================//
+
+    //=============== Wrappers for preprocessing and postprocessing ===============//
+
+    void preprocess_images_scalar(const ImageRGBA8& fg_srgb,
+                                  const ImageRGBA8& bg_srgb,
+                                  ImageRGBAf& fg_linear,
+                                  ImageRGBAf& bg_linear)
+    {
+        srgb_to_linear_scalar(fg_srgb, fg_linear);
+        srgb_to_linear_scalar(bg_srgb, bg_linear);
+        premultiply_inplace_scalar(fg_linear);
+        premultiply_inplace_scalar(bg_linear);
+    }
+
+    void preprocess_images_simd(const ImageRGBA8& fg_srgb,
+                                const ImageRGBA8& bg_srgb,
+                                ImageRGBAf& fg_linear,
+                                ImageRGBAf& bg_linear)
+    {
+        srgb_to_linear_simd(fg_srgb, fg_linear);
+        srgb_to_linear_simd(bg_srgb, bg_linear);
+        premultiply_inplace_simd(fg_linear);
+        premultiply_inplace_simd(bg_linear);
+    }
+
+    void postprocess_image_scalar(ImageRGBAf& out_linear, ImageRGBA8& out_srgb)
+    {
+        revert_premultiply_inplace_scalar(out_linear);
+        linear_to_srgb_scalar(out_linear, out_srgb);
+    }
+
+    void postprocess_image_simd(ImageRGBAf& out_linear, ImageRGBA8& out_srgb)
+    {
+        revert_premultiply_inplace_simd(out_linear);
+        linear_to_srgb_simd(out_linear, out_srgb);
+    }
 
 }
