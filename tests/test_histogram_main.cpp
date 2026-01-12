@@ -14,7 +14,7 @@ static Impl parse_impl(const std::string& s) {
 int main(int argc, char** argv) {
     // Defaults
     std::string input_dir  = "data/png";
-    std::string output_dir = "data/tests/hist_results";
+    std::string output_dir = "results/hist_results";
     Impl impl = Impl::Scalar;
     int iterations = 1;
 

@@ -85,7 +85,7 @@ int run_alpha_blend_tests(const std::string& input_dir,
                              + "_a" + std::to_string(global_opacity);
     const std::string perf_name = "blend_performance_" + suffix + ".csv";
     const std::string perf_path = (fs::path(output_dir) / perf_name).string();
-    std::ofstream perf_out(perf_path, std::ios::out | std::ios::trunc);
+    std::ofstream perf_out(perf_path, std::ios::out | std::ios::app);
     if (!perf_out) {
         throw std::runtime_error("Failed to open output file: '" + perf_path + "'");
     }

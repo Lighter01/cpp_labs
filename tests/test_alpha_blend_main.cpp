@@ -24,7 +24,7 @@ static Impl parse_impl(const std::string& s) {
 int main(int argc, char** argv) {
     // Defaults
     std::string input_dir  = "data/png";
-    std::string output_dir = "data/tests/blend_results";
+    std::string output_dir = "results/blend_results";
     float opacity = 1.0f;
     BlendMode mode = BlendMode::Over;
     Impl impl = Impl::Scalar;
