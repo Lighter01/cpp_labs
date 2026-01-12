@@ -6,7 +6,7 @@
 
 #define CSIZE (256 + 8)
 
-static void inline __attribute__((always_inline)) histend4(
+static inline void __attribute__((always_inline)) histend4(
     const std::array<std::array<std::uint32_t, CSIZE>, 4>& h,  
     std::array<std::uint32_t, 256>& out
 ) {
@@ -81,6 +81,7 @@ namespace alpha_hist {
         size_t N = static_cast<size_t>(in.height) * in.width;
 
         alignas(32) std::array<std::array<std::uint32_t, CSIZE>, 4> h{};
+        
         if (N >= (128 + 64)) {
             __m256i u0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels));
             __m256i v0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels+32));
@@ -221,17 +222,82 @@ namespace alpha_hist {
                 h[2][_mm256_extract_epi8(u1, 31)]++;
                 h[3][_mm256_extract_epi8(v1, 31)]++;
 
-                _mm_prefetch(reinterpret_cast<const std::uint8_t*>(pixels+512), 0);
+                // const std::uint8_t* pref = pixels + 512;
+                // const std::uint8_t* end  = in.data.data() + N;
+                _mm_prefetch(reinterpret_cast<const char*>(pixels+512), _MM_HINT_NTA);
             }
         }
         while (pixels < in.data.data() + N) h[0][*pixels++]++;
         histend4(h, out);
     }
 
+
+    static inline void extract_chars(std::array<std::uint32_t, CSIZE>& h, std::uint64_t x)
+    {
+            h[static_cast<std::uint8_t>(x)]++;
+            h[static_cast<std::uint8_t>(x >> 8)]++;
+            h[static_cast<std::uint8_t>(x >> 16)]++;
+            h[static_cast<std::uint8_t>(x >> 24)]++;
+            h[static_cast<std::uint8_t>(x >> 32)]++;
+            h[static_cast<std::uint8_t>(x >> 40)]++;
+            h[static_cast<std::uint8_t>(x >> 48)]++;
+            h[static_cast<std::uint8_t>(x >> 56)]++;
+    }
+
+    static inline void consume32_4hist(
+        std::array<std::array<std::uint32_t, CSIZE>, 4>& h, __m256i v
+    ) {
+        // 8bit monochrome pixel chunks
+        std::uint64_t p0_31   = _mm256_extract_epi64(v, 0);
+        std::uint64_t p32_63  = _mm256_extract_epi64(v, 1);
+        std::uint64_t p64_95  = _mm256_extract_epi64(v, 2);
+        std::uint64_t p96_127 = _mm256_extract_epi64(v, 3);  
+
+        extract_chars(h[0], p0_31);
+        extract_chars(h[1], p32_63);
+        extract_chars(h[2], p64_95);
+        extract_chars(h[3], p96_127);
+    }
+
+    void histogram_simd_shift(const ImageGray8& in, std::array<std::uint32_t, 256>& out)
+    {
+        const std::uint8_t* pixels = in.data.data();
+        size_t N = static_cast<size_t>(in.height) * in.width;
+
+        alignas(32) std::array<std::array<std::uint32_t, CSIZE>, 4> h{};
+
+        const std::uint8_t* end = pixels + N;
+        const std::uint8_t* limit = pixels + ((N - (64 + 128)) & ~127);
+
+        if (N >= (128 + 64)) {
+            __m256i u0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels));
+            __m256i v0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels+32));
+
+            for (; pixels <= limit; pixels += 128) {
+                __m256i u1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels+64));
+                __m256i v1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels+96));
+
+                consume32_4hist(h, u0);
+                consume32_4hist(h, v0);
+
+                u0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels+128));
+                v0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(pixels+160));
+
+                consume32_4hist(h, u1);
+                consume32_4hist(h, v1);
+                
+                _mm_prefetch(reinterpret_cast<const char*>(pixels+512), _MM_HINT_NTA);
+            }
+        }
+        while (pixels < end) h[0][*pixels++]++;
+        histend4(h, out);
+    }
+
+
     template <Impl I>
     std::array<std::uint32_t, 256> histogram(const ImageGray8& in)
     {
-        std::array<std::uint32_t, 256> out{};
+        alignas(32) std::array<std::uint32_t, 256> out{};
 
         if constexpr (I == Impl::Scalar) {
             histogram_scalar(in, out);

@@ -7,8 +7,6 @@
 #include <tuple>
 #include <stdexcept>
 #include <immintrin.h>
-
-
 namespace alpha_hist {
 
     static void ensure_ok(bool ok, const std::string& msg) {
@@ -76,64 +74,143 @@ namespace alpha_hist {
         float* out_p = out.data.data();
 
         const __m256 one = _mm256_set1_ps(1.0f);
-        const __m256 zero = _mm256_setzero_ps();
+        // const __m256 zero = _mm256_setzero_ps();
         const __m256 glob_op = _mm256_set1_ps(global_opacity);
 
-        const __m256i idx_alpha_rep = _mm256_setr_epi32(3,3,3,3, 7,7,7,7);
-
-        constexpr int kAlphaBlendMask = 0x88; // 0b10001000
-
         size_t i = 0;
-        for (; i + 1 < N; i += 2) {
+        for (; i + 7 < N; i += 8) {
             const size_t idx = i * 4;
 
-            // Loading 2 pixels (RGBA X2)
-            __m256 fg_v = _mm256_loadu_ps(fg_p + idx);
-            __m256 bg_v = _mm256_loadu_ps(bg_p + idx);
+            // Loading 8 pixels (RGBA X8)
 
-            // replicating alpha lanes
-            __m256 fg_a = _mm256_permutevar8x32_ps(fg_v, idx_alpha_rep);
-            __m256 bg_a = _mm256_permutevar8x32_ps(bg_v, idx_alpha_rep);
+            __m256 fg_v0 = _mm256_loadu_ps(fg_p + idx + 0 * 8);  // 0, 1
+            __m256 fg_v1 = _mm256_loadu_ps(fg_p + idx + 1 * 8);  // 2, 3
+            __m256 fg_v2 = _mm256_loadu_ps(fg_p + idx + 2 * 8);  // 4, 5
+            __m256 fg_v3 = _mm256_loadu_ps(fg_p + idx + 3 * 8);  // 6, 7
 
-            __m256 fg_a_scaled = _mm256_mul_ps(fg_a, glob_op);
+            __m256 bg_v0 = _mm256_loadu_ps(bg_p + idx + 0 * 8);
+            __m256 bg_v1 = _mm256_loadu_ps(bg_p + idx + 1 * 8);
+            __m256 bg_v2 = _mm256_loadu_ps(bg_p + idx + 2 * 8);
+            __m256 bg_v3 = _mm256_loadu_ps(bg_p + idx + 3 * 8);
 
-            __m256 F_a, F_b;
+            __m256 fg_scaled_0 = _mm256_mul_ps(fg_v0, glob_op);    // scales RGBA of px 0, 1
+            __m256 fg_scaled_1 = _mm256_mul_ps(fg_v1, glob_op);    // scales RGBA of px 2, 3
+            __m256 fg_scaled_2 = _mm256_mul_ps(fg_v2, glob_op);    // scales RGBA of px 4, 5
+            __m256 fg_scaled_3 = _mm256_mul_ps(fg_v3, glob_op);    // scales RGBA of px 6, 7
+
+            __m256 rgba_out_0, rgba_out_1, rgba_out_2, rgba_out_3;
 
             if constexpr (M == BlendMode::Over) {
-                F_a = one;
-                F_b = _mm256_sub_ps(one, fg_a_scaled);
+
+                __m256 fg_a_scaled_0 = _mm256_shuffle_ps(fg_scaled_0, fg_scaled_0, 255);
+                __m256 fg_a_scaled_1 = _mm256_shuffle_ps(fg_scaled_1, fg_scaled_1, 255);
+                __m256 fg_a_scaled_2 = _mm256_shuffle_ps(fg_scaled_2, fg_scaled_2, 255);
+                __m256 fg_a_scaled_3 = _mm256_shuffle_ps(fg_scaled_3, fg_scaled_3, 255);
+
+                __m256 F_b0 = _mm256_sub_ps(one, fg_a_scaled_0);
+                __m256 F_b1 = _mm256_sub_ps(one, fg_a_scaled_1);
+                __m256 F_b2 = _mm256_sub_ps(one, fg_a_scaled_2);
+                __m256 F_b3 = _mm256_sub_ps(one, fg_a_scaled_3);
+
+                rgba_out_0 = _mm256_fmadd_ps(F_b0, bg_v0, fg_scaled_0);
+                rgba_out_1 = _mm256_fmadd_ps(F_b1, bg_v1, fg_scaled_1);
+                rgba_out_2 = _mm256_fmadd_ps(F_b2, bg_v2, fg_scaled_2);
+                rgba_out_3 = _mm256_fmadd_ps(F_b3, bg_v3, fg_scaled_3);
+
             }
             else if constexpr (M == BlendMode::In) {
-                F_a = bg_a;
-                F_b = zero;
+
+                // replicating alpha lane
+                __m256 bg_a0 = _mm256_shuffle_ps(bg_v0, bg_v0, 255);
+                __m256 bg_a1 = _mm256_shuffle_ps(bg_v1, bg_v1, 255);
+                __m256 bg_a2 = _mm256_shuffle_ps(bg_v2, bg_v2, 255);
+                __m256 bg_a3 = _mm256_shuffle_ps(bg_v3, bg_v3, 255);
+
+                rgba_out_0 = _mm256_mul_ps(bg_a0, fg_scaled_0);
+                rgba_out_1 = _mm256_mul_ps(bg_a1, fg_scaled_1);
+                rgba_out_2 = _mm256_mul_ps(bg_a2, fg_scaled_2);
+                rgba_out_3 = _mm256_mul_ps(bg_a3, fg_scaled_3);
+
             }
             else if constexpr (M == BlendMode::Out) {
-                F_a = _mm256_sub_ps(one, bg_a);
-                F_b = zero;
+
+                __m256 bg_a0 = _mm256_shuffle_ps(bg_v0, bg_v0, 255);
+                __m256 bg_a1 = _mm256_shuffle_ps(bg_v1, bg_v1, 255);
+                __m256 bg_a2 = _mm256_shuffle_ps(bg_v2, bg_v2, 255);
+                __m256 bg_a3 = _mm256_shuffle_ps(bg_v3, bg_v3, 255);
+
+                __m256 F_a0 = _mm256_sub_ps(one, bg_a0);
+                __m256 F_a1 = _mm256_sub_ps(one, bg_a1);
+                __m256 F_a2 = _mm256_sub_ps(one, bg_a2);
+                __m256 F_a3 = _mm256_sub_ps(one, bg_a3);
+
+                rgba_out_0 = _mm256_mul_ps(F_a0, fg_scaled_0);
+                rgba_out_1 = _mm256_mul_ps(F_a1, fg_scaled_1);
+                rgba_out_2 = _mm256_mul_ps(F_a2, fg_scaled_2);
+                rgba_out_3 = _mm256_mul_ps(F_a3, fg_scaled_3);
+
             }
             else if constexpr (M == BlendMode::Atop) {
-                F_a = bg_a;
-                F_b = _mm256_sub_ps(one, fg_a_scaled);
+
+                __m256 bg_a0 = _mm256_shuffle_ps(bg_v0, bg_v0, 255);
+                __m256 bg_a1 = _mm256_shuffle_ps(bg_v1, bg_v1, 255);
+                __m256 bg_a2 = _mm256_shuffle_ps(bg_v2, bg_v2, 255);
+                __m256 bg_a3 = _mm256_shuffle_ps(bg_v3, bg_v3, 255);
+
+                __m256 fg_a_scaled_0 = _mm256_shuffle_ps(fg_scaled_0, fg_scaled_0, 255);
+                __m256 fg_a_scaled_1 = _mm256_shuffle_ps(fg_scaled_1, fg_scaled_1, 255);
+                __m256 fg_a_scaled_2 = _mm256_shuffle_ps(fg_scaled_2, fg_scaled_2, 255);
+                __m256 fg_a_scaled_3 = _mm256_shuffle_ps(fg_scaled_3, fg_scaled_3, 255);
+
+                __m256 F_b0 = _mm256_sub_ps(one, fg_a_scaled_0);
+                __m256 F_b1 = _mm256_sub_ps(one, fg_a_scaled_1);
+                __m256 F_b2 = _mm256_sub_ps(one, fg_a_scaled_2);
+                __m256 F_b3 = _mm256_sub_ps(one, fg_a_scaled_3);
+
+                rgba_out_0 = _mm256_fmadd_ps(bg_a0, fg_scaled_0, _mm256_mul_ps(F_b0, bg_v0));
+                rgba_out_1 = _mm256_fmadd_ps(bg_a1, fg_scaled_1, _mm256_mul_ps(F_b1, bg_v1));
+                rgba_out_2 = _mm256_fmadd_ps(bg_a2, fg_scaled_2, _mm256_mul_ps(F_b2, bg_v2));
+                rgba_out_3 = _mm256_fmadd_ps(bg_a3, fg_scaled_3, _mm256_mul_ps(F_b3, bg_v3));
+
             }
             else if constexpr (M == BlendMode::Xor) {
-                F_a = _mm256_sub_ps(one, bg_a);
-                F_b = _mm256_sub_ps(one, fg_a_scaled);
+
+                __m256 bg_a0 = _mm256_shuffle_ps(bg_v0, bg_v0, 255);
+                __m256 bg_a1 = _mm256_shuffle_ps(bg_v1, bg_v1, 255);
+                __m256 bg_a2 = _mm256_shuffle_ps(bg_v2, bg_v2, 255);
+                __m256 bg_a3 = _mm256_shuffle_ps(bg_v3, bg_v3, 255);
+
+                __m256 F_a0 = _mm256_sub_ps(one, bg_a0);
+                __m256 F_a1 = _mm256_sub_ps(one, bg_a1);
+                __m256 F_a2 = _mm256_sub_ps(one, bg_a2);
+                __m256 F_a3 = _mm256_sub_ps(one, bg_a3);
+
+                __m256 fg_a_scaled_0 = _mm256_shuffle_ps(fg_scaled_0, fg_scaled_0, 255);
+                __m256 fg_a_scaled_1 = _mm256_shuffle_ps(fg_scaled_1, fg_scaled_1, 255);
+                __m256 fg_a_scaled_2 = _mm256_shuffle_ps(fg_scaled_2, fg_scaled_2, 255);
+                __m256 fg_a_scaled_3 = _mm256_shuffle_ps(fg_scaled_3, fg_scaled_3, 255);
+
+                __m256 F_b0 = _mm256_sub_ps(one, fg_a_scaled_0);
+                __m256 F_b1 = _mm256_sub_ps(one, fg_a_scaled_1);
+                __m256 F_b2 = _mm256_sub_ps(one, fg_a_scaled_2);
+                __m256 F_b3 = _mm256_sub_ps(one, fg_a_scaled_3);
+
+                rgba_out_0 = _mm256_fmadd_ps(F_a0, fg_scaled_0, _mm256_mul_ps(F_b0, bg_v0));
+                rgba_out_1 = _mm256_fmadd_ps(F_a1, fg_scaled_1, _mm256_mul_ps(F_b1, bg_v1));
+                rgba_out_2 = _mm256_fmadd_ps(F_a2, fg_scaled_2, _mm256_mul_ps(F_b2, bg_v2));
+                rgba_out_3 = _mm256_fmadd_ps(F_a3, fg_scaled_3, _mm256_mul_ps(F_b3, bg_v3));
+
             }
             else {
                 throw std::runtime_error("Got uknown blend mode in SIMD kernel");
             }
 
-            // RGB
-            __m256 fg_scaled = _mm256_mul_ps(fg_v, glob_op); // scales both RGB and alpha
-            __m256 rgb_out = _mm256_fmadd_ps(F_a, fg_scaled, _mm256_mul_ps(F_b, bg_v));
-            
-            // alpha
-            __m256 a_out_rep = _mm256_fmadd_ps(F_a, fg_a_scaled, _mm256_mul_ps(F_b, bg_a));
-
-            // Put correct alpha only into lanes 3 and 7
-            __m256 out_v = _mm256_blend_ps(rgb_out, a_out_rep, kAlphaBlendMask);
-
-            _mm256_storeu_ps(out_p + idx, out_v);
+            // RGBA
+            // __m256 rgba_out = _mm256_fmadd_ps(F_a, fg_scaled, _mm256_mul_ps(F_b, bg_v));
+            _mm256_storeu_ps(out_p + idx + 0 * 8, rgba_out_0);
+            _mm256_storeu_ps(out_p + idx + 1 * 8, rgba_out_1);
+            _mm256_storeu_ps(out_p + idx + 2 * 8, rgba_out_2);
+            _mm256_storeu_ps(out_p + idx + 3 * 8, rgba_out_3);
         }
 
         // tail (1 pixel if N odd)
@@ -169,6 +246,8 @@ namespace alpha_hist {
             out_p[idx + 1] = F_a * global_opacity * fg_p[idx + 1] + F_b * bg_p[idx + 1];
             out_p[idx + 2] = F_a * global_opacity * fg_p[idx + 2] + F_b * bg_p[idx + 2];
         }
+
+        _mm256_zeroupper();
     }
 
     void blend_scalar(const ImageRGBAf& fg, 
@@ -255,6 +334,7 @@ namespace alpha_hist {
         ImageRGBA8 out_srgb;
 
         if constexpr (I == Impl::Scalar) {
+            
             auto t0 = std::chrono::high_resolution_clock::now();
             std::uint64_t c0 = static_cast<std::uint64_t>(_rdtsc());
             preprocess_images_scalar(fg_srgb, bg_srgb, fg_linear, bg_linear);
@@ -278,7 +358,9 @@ namespace alpha_hist {
             t1 = std::chrono::high_resolution_clock::now();
             timing.postprocess = t1 - t0;
             cycles.postprocess = c1 - c0;
+
         } else {
+
             auto t0 = std::chrono::high_resolution_clock::now();
             std::uint64_t c0 = static_cast<std::uint64_t>(_rdtsc());
             preprocess_images_simd(fg_srgb, bg_srgb, fg_linear, bg_linear);
@@ -302,6 +384,7 @@ namespace alpha_hist {
             t1 = std::chrono::high_resolution_clock::now();
             timing.postprocess = t1 - t0;
             cycles.postprocess = c1 - c0;
+
         }
 
         return out_srgb;

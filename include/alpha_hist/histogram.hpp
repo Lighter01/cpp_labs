@@ -10,6 +10,8 @@ namespace alpha_hist {
 
     void histogram_simd(const ImageGray8& in, std::array<std::uint32_t, 256>& out);
 
+    void histogram_simd_shift(const ImageGray8& in, std::array<std::uint32_t, 256>& out);
+
     template <Impl I>
     std::array<std::uint32_t, 256> histogram(const ImageGray8& in);
 

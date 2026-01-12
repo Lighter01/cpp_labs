@@ -24,6 +24,21 @@ target_include_directories(alpha_hist_lib PUBLIC
 # Good warning flags (GCC/Clang)
 target_compile_options(alpha_hist_lib PRIVATE
     -Wall -Wextra -Wpedantic -mavx2 -mfma
+    $<$<CONFIG:Debug>:-O0>
+    $<$<CONFIG:Release>:-O3>
+)
+
+# option(USE_NATIVE_ARCH "Optimize for the host CPU (-march=native)" OFF)
+
+# if (USE_NATIVE_ARCH)
+#   add_compile_options(-march=native)
+# else()
+#   # Baseline for your SIMD build (AVX2 + FMA)
+#   add_compile_options(-mavx2 -mfma)
+# endif()
+
+set_source_files_properties(src/histogram.cpp PROPERTIES
+  COMPILE_OPTIONS "$<$<CONFIG:Debug>:-fno-tree-vectorize>"
 )
 
 # --- App executable ---
