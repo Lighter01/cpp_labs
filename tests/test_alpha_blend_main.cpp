@@ -29,9 +29,10 @@ int main(int argc, char** argv) {
     BlendMode mode = BlendMode::Over;
     Impl impl = Impl::Scalar;
     int iterations = 1;
+    bool save_results = false;
 
     // Usage:
-    // ./test_alpha_blend [input_dir] [output_dir] [opacity] [mode] [impl] [iterations]
+    // ./test_alpha_blend [input_dir] [output_dir] [opacity] [mode] [impl] [iterations] [save_results]
     // Example:
     // ./test_alpha_blend data/png data/results 1.0 over scalar 10
     try {
@@ -41,15 +42,17 @@ int main(int argc, char** argv) {
         if (argc >= 5) mode       = parse_mode(argv[4]);
         if (argc >= 6) impl       = parse_impl(argv[5]);
         if (argc >= 7) iterations = std::stoi(argv[6]);
+        if (argc >= 8) save_results = std::stoi(argv[7]) != 0;
 
-        return alpha_hist::run_alpha_blend_tests(input_dir, output_dir, opacity, mode, impl, iterations);
+        return alpha_hist::run_alpha_blend_tests(input_dir, output_dir, opacity, mode, impl, iterations, save_results);
     } catch (const std::exception& e) {
         std::cerr << "test_alpha_blend failed: " << e.what() << "\n";
         std::cerr << "Usage:\n"
-                  << "  ./test_alpha_blend [input_dir] [output_dir] [opacity] [mode] [impl] [iterations]\n"
+                  << "  ./test_alpha_blend [input_dir] [output_dir] [opacity] [mode] [impl] [iterations] [save_results]\n"
                   << "  mode: over|in|out|atop|xor\n"
                   << "  impl: scalar|simd\n"
-                  << "  iterations: positive integer\n";
+                  << "  iterations: positive integer\n"
+                  << "  save_results: non-negative integer\n";
         return 1;
     }
 }

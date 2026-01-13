@@ -9,7 +9,7 @@
 namespace alpha_hist {
 
 // Runs a single histogram test: loads image, computes histogram, saves to CSV.
-void run_histogram_case(const std::string& in_path,
+void run_histogram_case(const ImageGray8& img,
                         const std::string& out_path,
                         Impl impl,
                         std::chrono::high_resolution_clock::duration& timing,

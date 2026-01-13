@@ -136,12 +136,12 @@ run_record_and_flame() {
 }
 
 # ---- BASIC ----
-if $DO_BASIC; then
-  run_stat "$RESULTS_DIR/perf_basic.stat"
-  run_record_and_flame "basic" \
-    "$RESULTS_DIR/perf_basic.data" \
-    "$RESULTS_DIR/flame_basic.svg"
-fi
+# if $DO_BASIC; then
+#   run_stat "$RESULTS_DIR/perf_basic.stat"
+#   run_record_and_flame "basic" \
+#     "$RESULTS_DIR/perf_basic.data" \
+#     "$RESULTS_DIR/flame_basic.svg"
+# fi
 
 # ---- DWARF + inline ----
 if $DO_DWARF; then

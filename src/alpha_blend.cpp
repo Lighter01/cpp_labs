@@ -14,6 +14,7 @@ namespace alpha_hist {
     }
 
     template <BlendMode M>
+    __attribute__((optimize("no-tree-vectorize"), noinline))
     void blend_kernel_scalar(const ImageRGBAf& fg, const ImageRGBAf& bg, ImageRGBAf& out, float global_opacity)
     {
         size_t N = static_cast<size_t>(fg.width) * static_cast<size_t>(fg.height);
@@ -62,6 +63,7 @@ namespace alpha_hist {
     }
 
     template <BlendMode M>
+    __attribute__((target("avx2,fma"), optimize("no-tree-vectorize"), noinline))
     void blend_kernel_simd(const ImageRGBAf& fg, const ImageRGBAf& bg, ImageRGBAf& out, float global_opacity)
     {
         size_t N = static_cast<size_t>(fg.width) * static_cast<size_t>(fg.height);
@@ -332,13 +334,14 @@ namespace alpha_hist {
     ) {
         ImageRGBAf fg_linear, bg_linear, out_linear;
         ImageRGBA8 out_srgb;
+        std::uint32_t aux;
 
         if constexpr (I == Impl::Scalar) {
             
             auto t0 = std::chrono::high_resolution_clock::now();
             std::uint64_t c0 = static_cast<std::uint64_t>(_rdtsc());
             preprocess_images_scalar(fg_srgb, bg_srgb, fg_linear, bg_linear);
-            std::uint64_t c1 = static_cast<std::uint64_t>(_rdtsc());
+            std::uint64_t c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
             auto t1 = std::chrono::high_resolution_clock::now();
             timing.preprocess = t1 - t0;
             cycles.preprocess = c1 - c0;
@@ -346,7 +349,7 @@ namespace alpha_hist {
             t0 = std::chrono::high_resolution_clock::now();
             c0 = static_cast<std::uint64_t>(_rdtsc());
             blend_scalar(fg_linear, bg_linear, out_linear, global_opacity, mode);
-            c1 = static_cast<std::uint64_t>(_rdtsc());
+            c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
             t1 = std::chrono::high_resolution_clock::now();
             timing.blend = t1 - t0;
             cycles.blend = c1 - c0;
@@ -354,7 +357,7 @@ namespace alpha_hist {
             t0 = std::chrono::high_resolution_clock::now();
             c0 = static_cast<std::uint64_t>(_rdtsc());
             postprocess_image_scalar(out_linear, out_srgb);
-            c1 = static_cast<std::uint64_t>(_rdtsc());
+            c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
             t1 = std::chrono::high_resolution_clock::now();
             timing.postprocess = t1 - t0;
             cycles.postprocess = c1 - c0;
@@ -364,7 +367,7 @@ namespace alpha_hist {
             auto t0 = std::chrono::high_resolution_clock::now();
             std::uint64_t c0 = static_cast<std::uint64_t>(_rdtsc());
             preprocess_images_simd(fg_srgb, bg_srgb, fg_linear, bg_linear);
-            std::uint64_t c1 = static_cast<std::uint64_t>(_rdtsc());
+            std::uint64_t c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
             auto t1 = std::chrono::high_resolution_clock::now();
             timing.preprocess = t1 - t0;
             cycles.preprocess = c1 - c0;
@@ -372,7 +375,7 @@ namespace alpha_hist {
             t0 = std::chrono::high_resolution_clock::now();
             c0 = static_cast<std::uint64_t>(_rdtsc());
             blend_simd(fg_linear, bg_linear, out_linear, global_opacity, mode);
-            c1 = static_cast<std::uint64_t>(_rdtsc());
+            c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
             t1 = std::chrono::high_resolution_clock::now();
             timing.blend = t1 - t0;
             cycles.blend = c1 - c0;
@@ -380,7 +383,7 @@ namespace alpha_hist {
             t0 = std::chrono::high_resolution_clock::now();
             c0 = static_cast<std::uint64_t>(_rdtsc());
             postprocess_image_simd(out_linear, out_srgb);
-            c1 = static_cast<std::uint64_t>(_rdtsc());
+            c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
             t1 = std::chrono::high_resolution_clock::now();
             timing.postprocess = t1 - t0;
             cycles.postprocess = c1 - c0;

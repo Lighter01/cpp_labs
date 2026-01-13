@@ -9,6 +9,7 @@ namespace alpha_hist {
 
     //============================ srgb_to_linear =================================//
 
+    __attribute__((optimize("no-tree-vectorize"), noinline))
     void srgb_to_linear_scalar(const ImageRGBA8& in, ImageRGBAf& out, bool use_exact_srgb) {
         size_t img_size = static_cast<size_t>(in.width * in.height);
         out.width = in.width;
@@ -28,6 +29,7 @@ namespace alpha_hist {
         }
     }
 
+    __attribute__((target("avx2,fma"), optimize("no-tree-vectorize"), noinline))
     void srgb_to_linear_simd(const ImageRGBA8& in, ImageRGBAf& out, bool use_exact_srgb) {
         const size_t img_size = static_cast<size_t>(in.width) * static_cast<size_t>(in.height);
 
@@ -109,6 +111,7 @@ namespace alpha_hist {
 
     //============================ linear_to_srgb =================================//
 
+    __attribute__((optimize("no-tree-vectorize"), noinline))
     void linear_to_srgb_scalar(const ImageRGBAf& in, ImageRGBA8& out, bool use_exact_srgb) {
         size_t img_size = static_cast<size_t>(in.width * in.height);
         out.width = in.width;
@@ -131,6 +134,7 @@ namespace alpha_hist {
         }
     }
 
+    __attribute__((target("avx2,fma"), optimize("no-tree-vectorize"), noinline))
     void linear_to_srgb_simd(const ImageRGBAf& in, ImageRGBA8& out, bool use_exact_srgb) {
         size_t img_size = static_cast<size_t>(in.width * in.height);
         out.width = in.width;
@@ -231,6 +235,7 @@ namespace alpha_hist {
 
     //========================= premultiply_inplace_scalar ========================//
 
+    __attribute__((optimize("no-tree-vectorize"), noinline))
     void premultiply_inplace_scalar(ImageRGBAf& in) {
         size_t N = static_cast<size_t>(in.height) * static_cast<size_t>(in.width);
 
@@ -245,6 +250,7 @@ namespace alpha_hist {
         }
     }
 
+    __attribute__((target("avx2,fma"), optimize("no-tree-vectorize"), noinline))
     void premultiply_inplace_simd(ImageRGBAf& in) {
         size_t N = static_cast<size_t>(in.height) * in.width;
         float* p = in.data.data();
@@ -287,6 +293,7 @@ namespace alpha_hist {
 
     //=================== revert_premultiply_inplace_scalar =======================//
 
+    __attribute__((optimize("no-tree-vectorize"), noinline))
     void revert_premultiply_inplace_scalar(ImageRGBAf& in) {
         constexpr float EPS = 1e-6f;
         size_t N = static_cast<size_t>(in.height) * static_cast<size_t>(in.width);
@@ -309,6 +316,7 @@ namespace alpha_hist {
         }
     }
 
+    __attribute__((target("avx2,fma"), optimize("no-tree-vectorize"), noinline))
     void revert_premultiply_inplace_simd(ImageRGBAf& in) {
         constexpr float EPS = 1e-6f;
         size_t N = static_cast<size_t>(in.height) * in.width;

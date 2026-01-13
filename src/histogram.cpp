@@ -6,7 +6,7 @@
 
 #define CSIZE (256 + 8)
 
-static inline void __attribute__((always_inline)) histend4(
+static inline __attribute__((always_inline)) void histend4(
     const std::array<std::array<std::uint32_t, CSIZE>, 4>& h,  
     std::array<std::uint32_t, 256>& out
 ) {
@@ -21,7 +21,7 @@ static inline void __attribute__((always_inline)) histend4(
     }
 }
 
-static void inline __attribute__((always_inline)) histend8(
+static inline __attribute__((always_inline)) void histend8(
     const std::array<std::array<std::uint32_t, CSIZE>, 8>& h,  
     std::array<std::uint32_t, 256>& out
 ) {
@@ -50,6 +50,7 @@ static void inline __attribute__((always_inline)) histend8(
 
 namespace alpha_hist {
 
+    __attribute__((optimize("no-tree-vectorize"), noinline))
     void histogram_scalar(const ImageGray8& in, std::array<std::uint32_t, 256>& out)
     {   
         const std::uint8_t* pixels = in.data.data();
@@ -75,6 +76,7 @@ namespace alpha_hist {
 
     }
     
+    __attribute__((target("avx2,fma"), optimize("no-tree-vectorize"), noinline))
     void histogram_simd(const ImageGray8& in, std::array<std::uint32_t, 256>& out)
     {
         const std::uint8_t* pixels = in.data.data();
@@ -259,6 +261,7 @@ namespace alpha_hist {
         extract_chars(h[3], p96_127);
     }
 
+    __attribute__((target("avx2,fma"), optimize("no-tree-vectorize"), noinline))
     void histogram_simd_shift(const ImageGray8& in, std::array<std::uint32_t, 256>& out)
     {
         const std::uint8_t* pixels = in.data.data();

@@ -25,14 +25,12 @@ static std::string lowercase(std::string s) {
     return s;
 }
 
-void run_histogram_case(const std::string& in_path,
+void run_histogram_case(const ImageGray8& img,
                         const std::string& out_path,
                         Impl impl,
                         std::chrono::high_resolution_clock::duration& timing,
                         std::uint64_t& cycles)
 {
-    ImageGray8 img = load_gray8(in_path);
-
     std::array<std::uint32_t, 256> hist{};
     if (impl == Impl::Scalar) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -99,21 +97,26 @@ int run_histogram_tests(const std::string& input_dir,
                   << "  IN:  " << path.string() << "\n"
                   << "  OUT: " << out_path << "\n";
 
+        // Read image once
+        ImageGray8 img = load_gray8(path.string());
+
         std::chrono::high_resolution_clock::duration timing{};
         std::uint64_t cycles = 0;
-        for (int iter = 0; iter < iterations; ++iter) {
+        for (int iter = 0; iter < iterations + 1; ++iter) {
             std::cout << "Iteration " << iter << "\n";
 
             auto t0 = std::chrono::high_resolution_clock::now();
 
-            run_histogram_case(path.string(), out_path, impl, timing, cycles);
+            run_histogram_case(img, out_path, impl, timing, cycles);
 
-            const auto timing_ns =
-                std::chrono::duration_cast<std::chrono::nanoseconds>(timing).count();
-            perf_out << out_path << ","
-                     << impl_tag << ","
-                     << timing_ns << ","
-                     << cycles << "\n";
+            // First iteration is dropped before cache warm-up
+            if (iter) {
+                const auto timing_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timing).count();
+                perf_out << out_path << ","
+                         << impl_tag << ","
+                         << timing_ns << ","
+                         << cycles << "\n";
+            }
 
             auto t1 = std::chrono::high_resolution_clock::now();
             const auto iter_time_sec = 
