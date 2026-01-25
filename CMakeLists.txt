@@ -23,9 +23,9 @@ target_include_directories(alpha_hist_lib PUBLIC
 
 # Good warning flags (GCC/Clang)
 target_compile_options(alpha_hist_lib PRIVATE
-    -Wall -Wextra -Wpedantic -mavx2 -mfma
+    -Wall -Wextra -Wpedantic -mavx2 -mfma -fno-tree-vectorize
     $<$<CONFIG:Debug>:-O0>
-    $<$<CONFIG:Release>:-O3>
+    $<$<CONFIG:Release,RelWithDebInfo>:-O3>
 )
 
 # option(USE_NATIVE_ARCH "Optimize for the host CPU (-march=native)" OFF)
