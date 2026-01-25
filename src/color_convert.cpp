@@ -127,7 +127,7 @@ namespace alpha_hist {
             for (size_t c = 0; c < 3; ++c) {
                 float cl = std::ranges::clamp(in.data[idx + c], 0.0f, 1.0f);
                 size_t idx_lut = static_cast<size_t>(cl * (N - 1) + 0.5f);
-                out.data[idx + c] = lut.linear_to_srgb[idx_lut];
+                out.data[idx + c] = static_cast<std::uint8_t>(lut.linear_to_srgb[idx_lut]);
             }
 
             out.data[idx + 3] = float32_to_u8(in.data[idx + 3]);
@@ -144,18 +144,7 @@ namespace alpha_hist {
         const ColorLUT& lut = get_color_lut(4096, use_exact_srgb);
         const size_t lut_size = static_cast<size_t>(lut.linear_size);
 
-        static std::vector<std::uint32_t> lut_u32; // only for AVX2 _mm_i32gather_epi32
-        static size_t last_size = 0;
-        static bool last_exact = true;
-        if (lut_u32.empty() || last_size != lut_size || last_exact != use_exact_srgb) {
-            lut_u32.resize(lut_size);
-            for (size_t i = 0; i < lut_size; ++i) {
-                lut_u32[i] = lut.linear_to_srgb[i];
-            }
-            last_size = lut_size;
-            last_exact = use_exact_srgb;
-        }
-        const std::uint32_t* lut32 = lut_u32.data();
+        const std::uint32_t* lut32 = lut.linear_to_srgb.data(); // only for AVX2 _mm_i32gather_epi32
 
         const float* in_p = in.data.data();
         std::uint8_t* out_p = out.data.data();

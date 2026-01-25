@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+
 namespace alpha_hist {
 
     struct ColorLUT {
@@ -10,7 +11,7 @@ namespace alpha_hist {
 
         std::array<float, kSrgbSize> srgb_to_linear{};
 
-        std::vector<std::uint8_t> linear_to_srgb;
+        std::vector<std::uint32_t> linear_to_srgb;
         int linear_size = 0;
     };
 

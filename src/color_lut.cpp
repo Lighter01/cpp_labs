@@ -53,23 +53,38 @@ namespace alpha_hist {
 
         lut.linear_size = linear_table_size;
         lut.linear_to_srgb.resize(static_cast<size_t>(linear_table_size));
+
         for (int j = 0; j < linear_table_size; ++j) {
             float cl = static_cast<float>(j) / static_cast<float>(linear_table_size - 1);
             float cs = use_exect_srgb ? _linear_to_srgb_exact(cl) : _linear_to_srgb_approx(cl);
-            lut.linear_to_srgb[static_cast<size_t>(j)] = float32_to_u8(cs);
+            // Конвертирую, потому что меняю логику в linear_to_srgb для потокобезопасного кода
+            lut.linear_to_srgb[static_cast<size_t>(j)] = static_cast<std::uint32_t>(float32_to_u8(cs));
         }
     }
 
-    const ColorLUT& get_color_lut(int linear_table_size, bool use_exect_srgb) {
-        static ColorLUT lut;
-        static int last_size = 0;
-        static bool last_exact = true;
+    const ColorLUT& get_color_lut(int linear_table_size, bool use_exact_srgb) {
+        static std::once_flag init_flag;
+        static int init_size = 0;
+        static bool init_exact = false;
 
-        if (lut.linear_to_srgb.empty() || last_size != linear_table_size || last_exact != use_exect_srgb) {
-            build_lut(lut, linear_table_size, use_exect_srgb);
-            last_size = linear_table_size;
-            last_exact = use_exect_srgb;
+        static ColorLUT lut;
+
+        std::call_once(init_flag, [=] {
+            init_size = linear_table_size;
+            init_exact = use_exact_srgb;
+            build_lut(lut, linear_table_size, use_exact_srgb);
+        });
+
+        if (linear_table_size != init_size || use_exact_srgb != init_exact) {
+            throw std::runtime_error(
+                "get_color_lut(): LUT configuration changed at runtime. "
+                "Expected size=" + std::to_string(init_size) +
+                ", exact=" + std::to_string(init_exact) +
+                " but got size=" + std::to_string(linear_table_size) +
+                ", exact=" + std::to_string(use_exact_srgb)
+            );
         }
+
         return lut;
     }
 
