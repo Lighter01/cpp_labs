@@ -1,12 +1,20 @@
 #include "alpha_hist/image.hpp"
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
+
+class ThreadPool;
 namespace alpha_hist {
 
     enum class Impl {
         Scalar,
         SIMD
+    };
+
+    enum class ExecMode {
+        Seq,
+        Par
     };
 
     enum class BlendMode {
@@ -29,6 +37,22 @@ namespace alpha_hist {
     void blend_simd(const ImageRGBAf& fg, const ImageRGBAf& bg, ImageRGBAf& out, 
                     float global_opacity = 1.0f, BlendMode mode = BlendMode::Over);
 
+    void blend_scalar_par(ThreadPool& pool,
+                          const ImageRGBAf& fg,
+                          const ImageRGBAf& bg,
+                          ImageRGBAf& out,
+                          float global_opacity = 1.0f,
+                          BlendMode mode = BlendMode::Over,
+                          size_t grain = 0);
+
+    void blend_simd_par(ThreadPool& pool,
+                        const ImageRGBAf& fg,
+                        const ImageRGBAf& bg,
+                        ImageRGBAf& out,
+                        float global_opacity = 1.0f,
+                        BlendMode mode = BlendMode::Over,
+                        size_t grain = 0);
+
     struct BlendStageTiming {
         std::chrono::high_resolution_clock::duration preprocess{};
         std::chrono::high_resolution_clock::duration blend{};
@@ -41,14 +65,16 @@ namespace alpha_hist {
         std::uint64_t postprocess = 0;
     };
 
-    template <Impl I>
+    template <Impl I, ExecMode E>
     ImageRGBA8 alpha_blend_pipeline_templ(
         const ImageRGBA8& fg_srgb,
         const ImageRGBA8& bg_srgb,
         float global_opacity,
         BlendMode mode,
         BlendStageTiming& timing,
-        BlendStageCycles& cycles
+        BlendStageCycles& cycles,
+        ThreadPool* pool = nullptr,
+        size_t grain = 0
     );
 
     //=============================================================================//
@@ -65,7 +91,31 @@ namespace alpha_hist {
                                 ImageRGBAf& fg_linear,
                                 ImageRGBAf& bg_linear);
 
+    void preprocess_images_scalar_par(ThreadPool& pool,
+                                      const ImageRGBA8& fg_srgb,
+                                      const ImageRGBA8& bg_srgb,
+                                      ImageRGBAf& fg_linear,
+                                      ImageRGBAf& bg_linear,
+                                      size_t grain = 0);
+
+    void preprocess_images_simd_par(ThreadPool& pool,
+                                    const ImageRGBA8& fg_srgb,
+                                    const ImageRGBA8& bg_srgb,
+                                    ImageRGBAf& fg_linear,
+                                    ImageRGBAf& bg_linear,
+                                    size_t grain = 0);
+
     void postprocess_image_scalar(ImageRGBAf& out_linear, ImageRGBA8& out_srgb);
 
     void postprocess_image_simd(ImageRGBAf& out_linear, ImageRGBA8& out_srgb);
+
+    void postprocess_image_scalar_par(ThreadPool& pool,
+                                      ImageRGBAf& out_linear,
+                                      ImageRGBA8& out_srgb,
+                                      size_t grain = 0);
+
+    void postprocess_image_simd_par(ThreadPool& pool,
+                                    ImageRGBAf& out_linear,
+                                    ImageRGBA8& out_srgb,
+                                    size_t grain = 0);
 }

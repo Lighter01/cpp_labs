@@ -71,7 +71,7 @@ int run_histogram_tests(const std::string& input_dir,
     const std::string impl_tag = impl_name(impl);
     const std::string perf_name = "histogram_performance_" + impl_tag + ".csv";
     const std::string perf_path = (fs::path(output_dir) / perf_name).string();
-    std::ofstream perf_out(perf_path, std::ios::out | std::ios::app); // trunc
+    std::ofstream perf_out(perf_path, std::ios::out | std::ios::trunc); // trunc
     if (!perf_out) {
         throw std::runtime_error("Failed to open output file: '" + perf_path + "'");
     }

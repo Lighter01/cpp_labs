@@ -14,6 +14,7 @@ add_library(alpha_hist_lib
     src/color_convert.cpp
     src/alpha_blend.cpp
     src/histogram.cpp
+    src/thread_pool.cpp
 )
 
 target_include_directories(alpha_hist_lib PUBLIC
@@ -23,7 +24,7 @@ target_include_directories(alpha_hist_lib PUBLIC
 
 # Good warning flags (GCC/Clang)
 target_compile_options(alpha_hist_lib PRIVATE
-    -Wall -Wextra -Wpedantic -mavx2 -mfma -fno-tree-vectorize
+    -Wall -Wextra -Wpedantic -mavx2 -mfma -fno-tree-loop-vectorize -fno-tree-slp-vectorize # -fno-tree-vectorize
     $<$<CONFIG:Debug>:-O0>
     $<$<CONFIG:Release,RelWithDebInfo>:-O3>
 )
@@ -60,6 +61,9 @@ add_executable(test_alpha_blend
 )
 target_link_libraries(test_alpha_blend PRIVATE alpha_hist_lib)
 target_include_directories(test_alpha_blend PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_options(test_alpha_blend PRIVATE
+  "-Wl,-rpath,/usr/local/gcc-14.1.0/lib64"
+)
 
 # --- Histogram tests ---
 add_executable(test_histogram

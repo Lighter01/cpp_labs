@@ -18,6 +18,14 @@ namespace alpha_hist {
         Stripe135,
         Rectangle,
         Circle,
+        SineBands,
+        Lissajous,
+        Spiral,
+        RoundedRects,
+        Concentric,
+        Blobs,
+        RandomForms,
+        GaussianNoise,
     };
 
     ImageRGBA8 generate_test_image_rgba(size_t w, size_t h, GenMode img_type);
