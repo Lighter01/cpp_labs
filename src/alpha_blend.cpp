@@ -12,12 +12,6 @@
 namespace alpha_hist {
 namespace {
 
-constexpr size_t kDefaultGrain = 1 << 14;
-
-size_t resolve_grain(size_t grain) {
-    return (grain == 0) ? kDefaultGrain : grain;
-}
-
 static void ensure_ok(bool ok, const std::string& msg) {
     if (!ok) {
         throw std::runtime_error(msg);
@@ -394,7 +388,7 @@ void blend_scalar_par(ThreadPool& pool,
               + "background image shape: ("
               + std::to_string(bg.width) + ", " + std::to_string(bg.height) + ")");
 
-    ParExec exec{pool, resolve_grain(grain), 1};
+    ParExec exec{pool, grain, 1};
     blend_scalar_exec(fg, bg, out, global_opacity, mode, exec);
 }
 
@@ -414,7 +408,7 @@ void blend_simd_par(ThreadPool& pool,
               + "background image shape: ("
               + std::to_string(bg.width) + ", " + std::to_string(bg.height) + ")");
 
-    ParExec exec{pool, resolve_grain(grain), 8};
+    ParExec exec{pool, grain, 8};
     blend_simd_exec(fg, bg, out, global_opacity, mode, exec);
 }
 
@@ -452,11 +446,10 @@ void preprocess_images_scalar_par(ThreadPool& pool,
                                   ImageRGBAf& bg_linear,
                                   size_t grain)
 {
-    [[maybe_unused]] const size_t use_grain = resolve_grain(grain);
-    srgb_to_linear_scalar_par(pool, fg_srgb, fg_linear, true, use_grain);
-    srgb_to_linear_scalar_par(pool, bg_srgb, bg_linear, true, use_grain);
-    premultiply_inplace_scalar_par(pool, fg_linear, use_grain);
-    premultiply_inplace_scalar_par(pool, bg_linear, use_grain);
+    srgb_to_linear_scalar_par(pool, fg_srgb, fg_linear, true, grain);
+    srgb_to_linear_scalar_par(pool, bg_srgb, bg_linear, true, grain);
+    premultiply_inplace_scalar_par(pool, fg_linear, grain);
+    premultiply_inplace_scalar_par(pool, bg_linear, grain);
 }
 
 void preprocess_images_simd_par(ThreadPool& pool,
@@ -466,11 +459,10 @@ void preprocess_images_simd_par(ThreadPool& pool,
                                 ImageRGBAf& bg_linear,
                                 size_t grain)
 {
-    const size_t use_grain = resolve_grain(grain);
-    srgb_to_linear_simd_par(pool, fg_srgb, fg_linear, true, use_grain);
-    srgb_to_linear_simd_par(pool, bg_srgb, bg_linear, true, use_grain);
-    premultiply_inplace_simd_par(pool, fg_linear, use_grain);
-    premultiply_inplace_simd_par(pool, bg_linear, use_grain);
+    srgb_to_linear_simd_par(pool, fg_srgb, fg_linear, true, grain);
+    srgb_to_linear_simd_par(pool, bg_srgb, bg_linear, true, grain);
+    premultiply_inplace_simd_par(pool, fg_linear, grain);
+    premultiply_inplace_simd_par(pool, bg_linear, grain);
 }
 
 void postprocess_image_scalar(ImageRGBAf& out_linear, ImageRGBA8& out_srgb)
@@ -490,9 +482,8 @@ void postprocess_image_scalar_par(ThreadPool& pool,
                                   ImageRGBA8& out_srgb,
                                   size_t grain)
 {
-    const size_t use_grain = resolve_grain(grain);
-    revert_premultiply_inplace_scalar_par(pool, out_linear, use_grain);
-    linear_to_srgb_scalar_par(pool, out_linear, out_srgb, true, use_grain);
+    revert_premultiply_inplace_scalar_par(pool, out_linear, grain);
+    linear_to_srgb_scalar_par(pool, out_linear, out_srgb, true, grain);
 }
 
 void postprocess_image_simd_par(ThreadPool& pool,
@@ -500,9 +491,8 @@ void postprocess_image_simd_par(ThreadPool& pool,
                                 ImageRGBA8& out_srgb,
                                 size_t grain)
 {
-    const size_t use_grain = resolve_grain(grain);
-    revert_premultiply_inplace_simd_par(pool, out_linear, use_grain);
-    linear_to_srgb_simd_par(pool, out_linear, out_srgb, true, use_grain);
+    revert_premultiply_inplace_simd_par(pool, out_linear, grain);
+    linear_to_srgb_simd_par(pool, out_linear, out_srgb, true, grain);
 }
 
 //=============================================================================//
@@ -522,15 +512,13 @@ ImageRGBA8 alpha_blend_pipeline_templ(
     ImageRGBA8 out_srgb;
     std::uint32_t aux;
 
-    const size_t use_grain = resolve_grain(grain);
-
     if constexpr (I == Impl::Scalar) {
         auto t0 = std::chrono::high_resolution_clock::now();
         std::uint64_t c0 = static_cast<std::uint64_t>(_rdtsc());
         if constexpr (E == ExecMode::Seq) {
             preprocess_images_scalar(fg_srgb, bg_srgb, fg_linear, bg_linear);
         } else {
-            preprocess_images_scalar_par(require_pool(pool), fg_srgb, bg_srgb, fg_linear, bg_linear, use_grain);
+            preprocess_images_scalar_par(require_pool(pool), fg_srgb, bg_srgb, fg_linear, bg_linear, grain);
         }
         std::uint64_t c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -542,7 +530,7 @@ ImageRGBA8 alpha_blend_pipeline_templ(
         if constexpr (E == ExecMode::Seq) {
             blend_scalar(fg_linear, bg_linear, out_linear, global_opacity, mode);
         } else {
-            blend_scalar_par(require_pool(pool), fg_linear, bg_linear, out_linear, global_opacity, mode, use_grain);
+            blend_scalar_par(require_pool(pool), fg_linear, bg_linear, out_linear, global_opacity, mode, grain);
         }
         c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
         t1 = std::chrono::high_resolution_clock::now();
@@ -554,7 +542,7 @@ ImageRGBA8 alpha_blend_pipeline_templ(
         if constexpr (E == ExecMode::Seq) {
             postprocess_image_scalar(out_linear, out_srgb);
         } else {
-            postprocess_image_scalar_par(require_pool(pool), out_linear, out_srgb, use_grain);
+            postprocess_image_scalar_par(require_pool(pool), out_linear, out_srgb, grain);
         }
         c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
         t1 = std::chrono::high_resolution_clock::now();
@@ -566,7 +554,7 @@ ImageRGBA8 alpha_blend_pipeline_templ(
         if constexpr (E == ExecMode::Seq) {
             preprocess_images_simd(fg_srgb, bg_srgb, fg_linear, bg_linear);
         } else {
-            preprocess_images_simd_par(require_pool(pool), fg_srgb, bg_srgb, fg_linear, bg_linear, use_grain);
+            preprocess_images_simd_par(require_pool(pool), fg_srgb, bg_srgb, fg_linear, bg_linear, grain);
         }
         std::uint64_t c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -578,7 +566,7 @@ ImageRGBA8 alpha_blend_pipeline_templ(
         if constexpr (E == ExecMode::Seq) {
             blend_simd(fg_linear, bg_linear, out_linear, global_opacity, mode);
         } else {
-            blend_simd_par(require_pool(pool), fg_linear, bg_linear, out_linear, global_opacity, mode, use_grain);
+            blend_simd_par(require_pool(pool), fg_linear, bg_linear, out_linear, global_opacity, mode, grain);
         }
         c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
         t1 = std::chrono::high_resolution_clock::now();
@@ -590,7 +578,7 @@ ImageRGBA8 alpha_blend_pipeline_templ(
         if constexpr (E == ExecMode::Seq) {
             postprocess_image_simd(out_linear, out_srgb);
         } else {
-            postprocess_image_simd_par(require_pool(pool), out_linear, out_srgb, use_grain);
+            postprocess_image_simd_par(require_pool(pool), out_linear, out_srgb, grain);
         }
         c1 = static_cast<std::uint64_t>(_rdtscp(&aux));
         t1 = std::chrono::high_resolution_clock::now();

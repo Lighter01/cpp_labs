@@ -27,8 +27,10 @@ int main(int argc, char** argv) {
         if (argc >= 3) output_dir = argv[2];
         if (argc >= 4) impl       = parse_impl(argv[3]);
         if (argc >= 5) iterations = std::stoi(argv[4]);
-
-        return alpha_hist::run_histogram_tests(input_dir, output_dir, impl, iterations);
+        
+        bool first_iter = true;
+        return alpha_hist::run_histogram_tests(input_dir, output_dir, impl, iterations, first_iter);
+        first_iter = false;
     } catch (const std::exception& e) {
         std::cerr << "test_histogram failed: " << e.what() << "\n";
         std::cerr << "Usage:\n"

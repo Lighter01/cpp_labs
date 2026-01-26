@@ -10,12 +10,6 @@
 namespace alpha_hist {
 namespace {
 
-constexpr size_t kDefaultGrain = 1 << 14;
-
-size_t resolve_grain(size_t grain) {
-    return (grain == 0) ? kDefaultGrain : grain;
-}
-
 __attribute__((optimize("no-tree-vectorize"), noinline))
 void srgb_to_linear_scalar_chunk(const std::uint8_t* in_p,
                                  float* out_p,
@@ -464,7 +458,7 @@ void srgb_to_linear_scalar_par(ThreadPool& pool,
                                bool use_exact_srgb,
                                size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 1};
+    ParExec exec{pool, grain, 1};
     srgb_to_linear_scalar_exec(in, out, use_exact_srgb, exec);
 }
 
@@ -474,7 +468,7 @@ void srgb_to_linear_simd_par(ThreadPool& pool,
                              bool use_exact_srgb,
                              size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 8};
+    ParExec exec{pool, grain, 8};
     srgb_to_linear_simd_exec(in, out, use_exact_srgb, exec);
 }
 
@@ -494,7 +488,7 @@ void linear_to_srgb_scalar_par(ThreadPool& pool,
                                bool use_exact_srgb,
                                size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 1};
+    ParExec exec{pool, grain, 1};
     linear_to_srgb_scalar_exec(in, out, use_exact_srgb, exec);
 }
 
@@ -504,7 +498,7 @@ void linear_to_srgb_simd_par(ThreadPool& pool,
                              bool use_exact_srgb,
                              size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 4};
+    ParExec exec{pool, grain, 4};
     linear_to_srgb_simd_exec(in, out, use_exact_srgb, exec);
 }
 
@@ -520,13 +514,13 @@ void premultiply_inplace_simd(ImageRGBAf& in)
 
 void premultiply_inplace_scalar_par(ThreadPool& pool, ImageRGBAf& in, size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 1};
+    ParExec exec{pool, grain, 1};
     premultiply_inplace_scalar_exec(in, exec);
 }
 
 void premultiply_inplace_simd_par(ThreadPool& pool, ImageRGBAf& in, size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 2};
+    ParExec exec{pool, grain, 2};
     premultiply_inplace_simd_exec(in, exec);
 }
 
@@ -542,13 +536,13 @@ void revert_premultiply_inplace_simd(ImageRGBAf& in)
 
 void revert_premultiply_inplace_scalar_par(ThreadPool& pool, ImageRGBAf& in, size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 1};
+    ParExec exec{pool, grain, 1};
     revert_premultiply_inplace_scalar_exec(in, exec);
 }
 
 void revert_premultiply_inplace_simd_par(ThreadPool& pool, ImageRGBAf& in, size_t grain)
 {
-    ParExec exec{pool, resolve_grain(grain), 2};
+    ParExec exec{pool, grain, 2};
     revert_premultiply_inplace_simd_exec(in, exec);
 }
 

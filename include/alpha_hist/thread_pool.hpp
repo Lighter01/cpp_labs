@@ -80,7 +80,7 @@ void ThreadPool::enqueue(Fn&& f) {
         if (!accepting_.load(std::memory_order_relaxed)) {
             throw std::runtime_error("ThreadPool is stopping");
         }
-        tasks_.emplace(std::forward<F>(f));
+        tasks_.emplace(std::forward<Fn>(f));
     }
     cv_.notify_one();
 }

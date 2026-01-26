@@ -19,6 +19,7 @@ void run_histogram_case(const ImageGray8& img,
 int run_histogram_tests(const std::string& input_dir,
                         const std::string& output_dir,
                         Impl impl,
-                        int iterations);
+                        int iterations,
+                        bool first_iter);
 
 } // namespace alpha_hist

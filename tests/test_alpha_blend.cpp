@@ -113,9 +113,6 @@ int run_alpha_blend_tests(const std::string& input_dir,
     if (exec_mode == ExecMode::Par && num_threads == 0) {
         throw std::runtime_error("num_threads must be >= 1");
     }
-    if (grain == 0) {
-        // Zero means "use default grain" inside the pipeline.
-    }
 
     // ThreadPool lifetime spans all iterations to avoid per-iteration overhead.
     std::unique_ptr<ThreadPool> pool;

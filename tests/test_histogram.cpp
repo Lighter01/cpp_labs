@@ -64,18 +64,21 @@ void run_histogram_case(const ImageGray8& img,
 int run_histogram_tests(const std::string& input_dir,
                         const std::string& output_dir,
                         Impl impl,
-                        int iterations)
+                        int iterations,
+                        bool first_iter)
 {
     fs::create_directories(output_dir);
 
     const std::string impl_tag = impl_name(impl);
     const std::string perf_name = "histogram_performance_" + impl_tag + ".csv";
     const std::string perf_path = (fs::path(output_dir) / perf_name).string();
-    std::ofstream perf_out(perf_path, std::ios::out | std::ios::trunc); // trunc
+    std::ofstream perf_out(perf_path, std::ios::out | (first_iter ? std::ios::trunc : std::ios::app)); // trunc
     if (!perf_out) {
         throw std::runtime_error("Failed to open output file: '" + perf_path + "'");
     }
-    perf_out << "out_path,impl,timing_ns,cycles\n";
+    if (first_iter) {
+        perf_out << "out_size,out_channels,impl,timing_ns,cycles\n";
+    }
     size_t processed = 0;
 
     for (const auto& entry : fs::directory_iterator(input_dir)) {
@@ -112,7 +115,9 @@ int run_histogram_tests(const std::string& input_dir,
             // First iteration is dropped before cache warm-up
             if (iter) {
                 const auto timing_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timing).count();
-                perf_out << out_path << ","
+                
+                perf_out << img.data.size() << ","
+                         << img.channels << ","
                          << impl_tag << ","
                          << timing_ns << ","
                          << cycles << "\n";
