@@ -1,5 +1,7 @@
 # Отчет: SIMD vs Scalar + ThreadPool (RGBA alpha blending и histogram)
 
+Работу выполнил: Тонка Петр
+
 ## 1. Введение
 SIMD и многопоточность дают ускорение разными способами. SIMD повышает плотность вычислений внутри одного потока за счет векторных инструкций (AVX2/FMA), а ThreadPool масштабирует нагрузку по ядрам. В отчете объединены результаты двух лабораторных: SIMD-реализации (ЛР2) и пул потоков с data-parallel исполнением (ЛР3) для задач альфа-смешивания RGBA и построения 8-битной гистограммы яркости.
 
@@ -180,7 +182,6 @@ done.wait();
 Ниже добавлены разные виды распределений (boxplot/percentile/cumulative) для сравнения стабильности и хвостов.
 
 ![Histogram timing](plots_out/plots_simd_vs_scalar/histogram/hist_timing_ns_boxplot.png)
-![Histogram timing by index](plots_out/plots_simd_vs_scalar/histogram/hist_timing_ns_by_index.png)
 ![Histogram timing cumulative](plots_out/plots_simd_vs_scalar/histogram/hist_timing_ns_cumulative.png)
 ![Histogram timing hist KDE](plots_out/plots_simd_vs_scalar/histogram/hist_timing_ns_hist_kde.png)
 ![Histogram timing percentile](plots_out/plots_simd_vs_scalar/histogram/hist_timing_ns_percentile.png)
@@ -206,22 +207,19 @@ done.wait();
 ![Best threads vs MPix](plots_out/plots/best_threads_vs_mpix.png)
 ![Best total time (overall)](plots_out/plots/best_of_total_time.png)
 ![Best ns per pixel (overall)](plots_out/plots/ns_per_pixel_best_of.png)
-![Preprocess boxplot (1.0005 MPix)](plots_out/plots/box_preprocess_1p0005mpix.png)
-![Preprocess boxplot (32.004949 MPix)](plots_out/plots/box_preprocess_32p004949mpix.png)
-![Blend boxplot (1.0005 MPix)](plots_out/plots/box_blend_1p0005mpix.png)
-![Blend boxplot (32.004949 MPix)](plots_out/plots/box_blend_32p004949mpix.png)
-![Postprocess boxplot (1.0005 MPix)](plots_out/plots/box_postprocess_1p0005mpix.png)
-![Postprocess boxplot (32.004949 MPix)](plots_out/plots/box_postprocess_32p004949mpix.png)
+![Preprocess boxplot (1 MP)](plots_out/plots/box_preprocess_1p0005mpix.png)
+![Preprocess boxplot (32 MP)](plots_out/plots/box_preprocess_32p004949mpix.png)
+![Blend boxplot (1 MP)](plots_out/plots/box_blend_1p0005mpix.png)
+![Blend boxplot (32 MP)](plots_out/plots/box_blend_32p004949mpix.png)
+![Postprocess boxplot (1 MP)](plots_out/plots/box_postprocess_1p0005mpix.png)
+![Postprocess boxplot (32 MP)](plots_out/plots/box_postprocess_32p004949mpix.png)
 
 ### 6.4 SIMD + Threads vs baseline
 - Максимальный выигрыш относительно scalar seq: 1.63x (1 MPix, simd par, 32 потока).
 - Для больших изображений (32 MPix) итоговый выигрыш ~1.28x относительно scalar seq.
 - На больших размерах ограничение смещается в сторону пропускной способности памяти.
 
-## 7. Overhead распараллеливания
-Накладные расходы складываются из `enqueue`, синхронизации `latch` и конкуренции за память. Это видно на 2 MPix, где scalar-par оптимально на 1 потоке (speedup < 1), то есть overhead превышает выгоду от распараллеливания. В `ParExec` введен минимум `256k` пикселей на чанк, чтобы не плодить мелкие задачи, но при небольших изображениях даже этого недостаточно для устойчивого ускорения.
-
-## 8. Заключение
+## 7. Заключение
 - Реализованы scalar и SIMD версии alpha blending и histogram, а также ThreadPool и execution policies.
 - SIMD дает умеренный выигрыш для alpha blending (~1.09x в среднем), но для histogram текущая SIMD-версия медленнее из-за дорогостоящего извлечения байтов.
 - Многопоточность дает стабильный рост на больших изображениях (~1.2-1.3x), но ограничена bandwidth и overhead на малых размерах.
