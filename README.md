@@ -2,6 +2,24 @@
 
 Работу выполнил: Тонка Петр
 
+## 0. Пример команд для запуска
+```bash
+# скалярный однопоточный
+./build-release/test_alpha_blend data/png_test results_release/blend_results_scalar_seq 0.7 over scalar 10 0 --exec-mode seq
+# simd однопоточный
+./build-release/test_alpha_blend data/png_test results_release/blend_results_simd_seq 0.7 over simd 10 0 --exec-mode seq
+# скалярный многопоточный (потоки можно указывать в трех форматах, смотрите `tests/tests_alpha_blend_main.cpp`)
+./build-release/test_alpha_blend data/png_test results_release/blend_results_scalar_par 0.7 over scalar 10 0 --exec-mode par --num-threads 8
+# скалярный многопоточный (тест от 1 до 8 потоков последовательно)
+./build-release/test_alpha_blend data/png_test results_release/blend_results_scalar_par 0.7 over scalar 10 0 --exec-mode par --num-threads 1-8
+# скалярный многопоточный (тест 1, 2, 4, 8, 16 и 24 потоков последовательно)
+./build-release/test_alpha_blend data/png_test results_release/blend_results_scalar_par 0.7 over scalar 10 0 --exec-mode par --num-threads 1,2,4,8,16,24
+# simd многопоточный (тест 1, 2, 4, 8, 16 и 24 потоков последовательно)
+./build-release/test_alpha_blend data/png_test results_release/blend_results_simd_par 0.7 over simd 10 0 --exec-mode par --num-threads 16
+
+# Можно также воспользоваться скриптом `utils/benchmark.sh`.
+```
+
 ## 1. Введение
 SIMD и многопоточность дают ускорение разными способами. SIMD повышает плотность вычислений внутри одного потока за счет векторных инструкций (AVX2/FMA), а ThreadPool масштабирует нагрузку по ядрам. В отчете объединены результаты двух лабораторных: SIMD-реализации (ЛР2) и пул потоков с data-parallel исполнением (ЛР3) для задач альфа-смешивания RGBA и построения 8-битной гистограммы яркости.
 
